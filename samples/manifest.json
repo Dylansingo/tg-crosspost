@@ -1,0 +1,41 @@
+{
+  "channelId": -1009876543210,
+  "posts": [
+    {
+      "messageId": 101,
+      "file": "single.jpg",
+      "width": 1,
+      "height": 1,
+      "caption": "Morning on the towpath"
+    },
+    {
+      "messageId": 202,
+      "mediaGroupId": "market-day",
+      "file": "album-2.png",
+      "width": 16,
+      "height": 16,
+      "caption": "Saturday market #feedonly"
+    },
+    {
+      "messageId": 201,
+      "mediaGroupId": "market-day",
+      "file": "album-1.png",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "messageId": 203,
+      "mediaGroupId": "market-day",
+      "file": "album-3.png",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "messageId": 301,
+      "file": "story.png",
+      "width": 9,
+      "height": 16,
+      "caption": "Green room #StoryOnly"
+    }
+  ]
+}

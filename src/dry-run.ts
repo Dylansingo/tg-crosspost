@@ -26,9 +26,8 @@ interface StoredJob {
 
 /**
  * DRY_RUN handler. Logs the job (without pixel bytes) and appends a JSON
- * record to ./out/jobs.json. Buffers stay on the in-memory job for ME-1/PE-1.
- *
- * PE-1 replaces this with dry-run payloads and a preview.
+ * record to ./out/jobs.json. Buffers stay on the in-memory job. The publisher
+ * writes ./out/payloads and ./out/preview.html.
  */
 export function createDefaultJobHandler(options?: { outFile?: string }): JobHandler {
   const outFile = options?.outFile ?? DEFAULT_JOBS_FILE;

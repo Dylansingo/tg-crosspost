@@ -45,8 +45,8 @@ export function createIngestor(deps: IngestDeps): Ingestor {
   }
 
   async function emit(job: Job): Promise<void> {
-    // ME-1 hook: stage each buffer to local ./out or R2. The Media Engineer
-    // supplies a Stager. The returned location is what PE-1 will publish.
+    // ME-1 hook. The publisher also calls Stager.stage and is the path that
+    // posts the returned URL. Pass the stager to one of them, not both.
     if (deps.stager) {
       for (const [index, photo] of job.photos.entries()) {
         if (!photo.buffer) continue;

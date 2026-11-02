@@ -30,7 +30,7 @@ npm i && npm run demo
 1. Forces `DRY_RUN`.
 2. Feeds the sample images and captions through the same routing, deduplication, and album grouping as the webhook.
 3. Passes each photo buffer on the job.
-4. Writes `./out/jobs.json` and logs a DRY_RUN line per job.
+4. Writes `./out/jobs.json`, `./out/payloads/*.json`, and `./out/preview.html`. The pictures under `./out` are local stand-ins for R2 URLs. No platform is called.
 
 The samples are synthetic JPEG and PNG files plus `samples/manifest.json`:
 
@@ -63,7 +63,7 @@ On startup the process logs `DRY_RUN` and a table of enabled and disabled platfo
 | TikTok/Zernio      | `ZERNIO_API_KEY`, `ZERNIO_TIKTOK_ACCOUNT_ID`                                                   |
 | TikTok/native      | `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `TIKTOK_ACCESS_TOKEN`                             |
 
-`ZERNIO_BASE_URL` defaults to `https://api.zernio.com`. `SQLITE_PATH` defaults to `./data/tg-crosspost.db`.
+`ZERNIO_BASE_URL` defaults to `https://zernio.com/api`. `SQLITE_PATH` defaults to `./data/tg-crosspost.db`.
 
 ## Webhook server
 
@@ -105,7 +105,7 @@ curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
 
 `secret_token` is 1–256 characters from `A–Z`, `a–z`, `0–9`, `_`, and `-`.
 
-While `DRY_RUN` is true (the default), the handler logs each job and appends it to `./out/jobs.json`. Photo buffers stay on the in-memory job; the JSON file records byte lengths.
+While `DRY_RUN` is true (the default), the handler logs each job and appends it to `./out/jobs.json`. The publisher also writes dry-run payloads and `./out/preview.html`. Photo buffers stay on the in-memory job; the JSON file records byte lengths. See [docs/PUBLISHING.md](docs/PUBLISHING.md).
 
 ## Scripts
 
@@ -123,7 +123,7 @@ While `DRY_RUN` is true (the default), the handler logs each job and appends it 
 ```
 src/ingest/     webhook, routing, albums, dedup, downloads
 src/media/      ME-1 stager stub
-src/publish/    PE-1 publisher stub
+src/publish/    Instagram, Snapchat, and TikTok publisher
 src/types.ts    Job, Target, JobHandler
 src/config.ts   environment and platform table
 src/server.ts   Express entrypoint
@@ -140,4 +140,4 @@ stage(buf: Buffer, name: string): Promise<string>
 
 Stage under `./out` for offline runs, or to R2 when that platform is enabled. `@aws-sdk/client-s3` is installed for that work. Ingestion and the demo do not import it. The pipeline calls `stager.stage` when a stager is supplied, before the job handler.
 
-**PE-1 — `src/publish/index.ts`.** Implement `Publisher.publish(job)`. Build dry-run payloads and a preview from the job, then post to Instagram, Snapchat, and TikTok. `tiktok` on the job is a 9:16 photo. The route is `TIKTOK_VIA=zernio` (default) or `native`. Until a publisher is wired, `defaultJobHandler` logs the job and writes `./out/jobs.json`.
+**PE-1 — `src/publish/index.ts`.** `Publisher.publish(job)` stages each buffer with `Stager.stage`, then posts to Instagram, Snapchat, and TikTok. Dry-run writes `./out/payloads` and `./out/preview.html` and makes no network calls. `defaultJobHandler` still logs the job and writes `./out/jobs.json`. Details are in [docs/PUBLISHING.md](docs/PUBLISHING.md).

@@ -61,6 +61,7 @@ describe('config', () => {
     expect(report).not.toContain('enabled');
     expect(report).toContain('Telegram ingestion');
     expect(report).toContain('TikTok/Zernio');
+    expect(report).toContain('Stager: local files (./out/media)');
   });
 
   it('warns with the missing names when a platform group is only partly set', () => {
@@ -122,6 +123,7 @@ describe('config', () => {
     const report = formatStartupReport(config);
     expect(report).toContain('Instagram           enabled');
     expect(report).toContain('TikTok/Zernio       disabled');
+    expect(report).toContain('Stager: R2 (https://media.example.com)');
   });
 
   it('enables TikTok from the Zernio route or the native route', () => {

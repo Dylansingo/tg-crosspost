@@ -13,7 +13,7 @@ import {
   type TimerControls,
 } from './ingest/index.js';
 import { logError } from './log.js';
-import type { Stager } from './media/index.js';
+import { createStager, type Stager } from './media/index.js';
 import { isDirectRun } from './runtime.js';
 import { defaultJobHandler, type JobHandler } from './types.js';
 
@@ -108,6 +108,7 @@ export async function main(): Promise<void> {
   const bot = new Bot(config.telegram.botToken);
   const seen = createSeenStore(config.sqlitePath);
   seen.startHourlyPrune();
+  const stager = await createStager(config);
   const handle = createApp({
     channelId: config.telegram.channelId,
     webhookSecret: config.telegram.webhookSecret,
@@ -115,6 +116,7 @@ export async function main(): Promise<void> {
     seen,
     files: createGrammyFileApi(bot),
     fetcher: createHttpFetcher(),
+    stager,
   });
 
   const server = handle.app.listen(PORT, () => {

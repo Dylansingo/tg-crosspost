@@ -1,0 +1,17 @@
+{
+  "rules": [
+    {
+      "id": "delete-staged-media-after-1-day",
+      "enabled": true,
+      "conditions": {
+        "prefix": "media/"
+      },
+      "deleteObjectsTransition": {
+        "condition": {
+          "type": "Age",
+          "maxAge": 86400
+        }
+      }
+    }
+  ]
+}

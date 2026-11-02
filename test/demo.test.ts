@@ -45,9 +45,11 @@ describe('demo', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     const outFile = path.join(os.tmpdir(), `tg-crosspost-jobs-${process.pid}.json`);
+    const mediaDir = path.join(os.tmpdir(), `tg-crosspost-media-${process.pid}`);
     const jobs = await runDemo({
       samplesDir,
       outFile,
+      mediaDir,
       env: { DRY_RUN: 'false' },
       advanceTime: async (ms) => {
         await vi.advanceTimersByTimeAsync(ms);
@@ -101,10 +103,18 @@ describe('demo', () => {
     expect(stored[2]?.photos[0]?.byteLength).toBe(album.photos[0]?.buffer?.length);
     expect(JSON.stringify(stored)).not.toContain('"type":"Buffer"');
     expect(log.mock.calls.flat().join('\n')).toContain('demo mode forces DRY_RUN');
+    expect(single.photos[0]?.staged?.feed.startsWith('file://')).toBe(true);
+    expect(single.photos[0]?.staged?.tiktok).toBe(single.photos[0]?.staged?.story);
+    expect(fs.existsSync(path.join(mediaDir, 'contact-sheet.jpg'))).toBe(true);
+    const stagedNames = fs.readdirSync(mediaDir);
+    expect(stagedNames.filter((name) => name.endsWith('-feed.jpg'))).toHaveLength(5);
+    expect(stagedNames.filter((name) => name.endsWith('-story.jpg'))).toHaveLength(5);
     fs.rmSync(outFile, { force: true });
-  });
+    fs.rmSync(mediaDir, { recursive: true, force: true });
+  }, 90_000);
 
   it('runs from the CLI with no .env and no platform keys', async () => {
+    fs.rmSync(path.join(repoRoot, 'out'), { recursive: true, force: true });
     const env = { ...process.env };
     for (const key of PLATFORM_KEYS) delete env[key];
     const { stdout } = await execFileAsync('npm', ['run', 'demo', '--', './samples'], {
@@ -113,11 +123,22 @@ describe('demo', () => {
       timeout: 20_000,
     });
     const jobsPath = path.join(repoRoot, 'out', 'jobs.json');
-    const jobs = JSON.parse(fs.readFileSync(jobsPath, 'utf8')) as { photos: unknown[] }[];
+    const jobs = JSON.parse(fs.readFileSync(jobsPath, 'utf8')) as {
+      photos: { staged?: { feed: string; story: string; tiktok: string } }[];
+    }[];
     expect(jobs).toHaveLength(3);
     expect(jobs.filter((job) => job.photos.length === 3)).toHaveLength(1);
     expect(stdout).toContain('DRY_RUN: true');
     expect(stdout).toContain('disabled');
+    expect(stdout).toContain('Stager: local files (./out/media)');
+    const mediaDir = path.join(repoRoot, 'out', 'media');
+    const names = fs.readdirSync(mediaDir);
+    expect(names.filter((name) => name.endsWith('-feed.jpg'))).toHaveLength(5);
+    expect(names.filter((name) => name.endsWith('-story.jpg'))).toHaveLength(5);
+    expect(names).toContain('contact-sheet.jpg');
+    const recorded = JSON.stringify(jobs);
+    expect(recorded).toContain('file://');
+    expect(recorded).not.toContain('r2.cloudflarestorage.com');
     fs.rmSync(path.join(repoRoot, 'out'), { recursive: true, force: true });
-  }, 20_000);
+  }, 90_000);
 });

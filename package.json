@@ -21,6 +21,7 @@
     "better-sqlite3": "^12.11.1",
     "express": "^4.22.3",
     "grammy": "^1.46.0",
+    "sharp": "^0.35.5",
     "tsx": "^4.23.15",
     "zod": "^4.6.7"
   },
@@ -30,6 +31,7 @@
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.6",
     "@types/supertest": "^7.2.1",
+    "aws-sdk-client-mock": "^4.1.0",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.9.10",

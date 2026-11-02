@@ -27,10 +27,11 @@ npm i && npm run demo
 
 `npm run demo` reads `./samples`. `npm run demo -- ./samples` selects that folder explicitly. The command:
 
-1. Forces `DRY_RUN`.
+1. Forces `DRY_RUN` and stages locally, even when R2 keys are present. No network and no `.env`.
 2. Feeds the sample images and captions through the same routing, deduplication, and album grouping as the webhook.
-3. Passes each photo buffer on the job.
-4. Writes `./out/jobs.json` and logs a DRY_RUN line per job.
+3. Passes each photo buffer on the job and renders a 4:5 feed JPEG and a 9:16 story JPEG.
+4. Writes `./out/jobs.json` (with the `file://` URLs publishers would use) and logs a DRY_RUN line per job.
+5. Writes `./out/media/{id}-feed.jpg`, `./out/media/{id}-story.jpg`, and `./out/media/contact-sheet.jpg`.
 
 The samples are synthetic JPEG and PNG files plus `samples/manifest.json`:
 
@@ -52,7 +53,7 @@ Regenerate the images with `node scripts/generate-samples.mjs`.
 - `DRY_RUN` defaults to `true`.
 - `TIKTOK_VIA` is `zernio` (default) or `native`. TikTok enables from the keys of the chosen route only. `TIKTOK_PRIVACY` defaults to `SELF_ONLY` and does not enable the native route on its own.
 
-On startup the process logs `DRY_RUN` and a table of enabled and disabled platforms:
+On startup the process logs `DRY_RUN`, a table of enabled and disabled platforms, and which stager is active (`local files` or `R2`):
 
 | Platform           | Keys                                                                                           |
 | ------------------ | ---------------------------------------------------------------------------------------------- |
@@ -64,6 +65,19 @@ On startup the process logs `DRY_RUN` and a table of enabled and disabled platfo
 | TikTok/native      | `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `TIKTOK_ACCESS_TOKEN`                             |
 
 `ZERNIO_BASE_URL` defaults to `https://api.zernio.com`. `SQLITE_PATH` defaults to `./data/tg-crosspost.db`.
+
+R2 turns on only when `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, and `R2_PUBLIC_BASE_URL` are all set, and the process is not in demo mode. Otherwise renders stay in `./out/media`. Bucket layout, the one-day delete rule, and the TikTok domain check are in [docs/R2.md](docs/R2.md).
+
+## Media
+
+Each photo becomes two sRGB JPEGs. EXIF orientation is applied first, then metadata (including GPS) is stripped. PNG alpha is flattened onto the letterbox colour. WebP is accepted as well. Mozjpeg starts at quality 90 and steps down so the file stays under 8 MB.
+
+| Render           | Size             | Fit                                                                                                                               |
+| ---------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Feed (`ig_feed`) | 1080×1350 (4:5)  | Cover when the aspect is within 15% of 4:5, otherwise contain                                                                     |
+| Story and TikTok | 1080×1920 (9:16) | The photo is contained and centred. Behind it, the same photo is cover-scaled, blurred (sigma 24), and darkened to 40% brightness |
+
+The letterbox and flatten colour is `#1a1a1a`. `staged.tiktok` is the same URL as `staged.story`.
 
 ## Webhook server
 
@@ -122,7 +136,7 @@ While `DRY_RUN` is true (the default), the handler logs each job and appends it 
 
 ```
 src/ingest/     webhook, routing, albums, dedup, downloads
-src/media/      ME-1 stager stub
+src/media/      feed and story renders, local and R2 stagers
 src/publish/    PE-1 publisher stub
 src/types.ts    Job, Target, JobHandler
 src/config.ts   environment and platform table
@@ -132,12 +146,6 @@ src/demo.ts     offline sample runner
 
 ## Extension points
 
-**ME-1 — `src/media/index.ts`.** Implement `Stager`:
-
-```ts
-stage(buf: Buffer, name: string): Promise<string>
-```
-
-Stage under `./out` for offline runs, or to R2 when that platform is enabled. `@aws-sdk/client-s3` is installed for that work. Ingestion and the demo do not import it. The pipeline calls `stager.stage` when a stager is supplied, before the job handler.
+**Media — `src/media/`.** `Stager.stage(buf, name)` returns `{ feed, story, tiktok }` URLs. The pipeline stores them on `photo.staged` before the job handler. `LocalStager` writes `file://` URLs under `./out/media`. `R2Stager` uploads with `ContentType: image/jpeg` and is imported only when R2 is enabled outside demo mode.
 
 **PE-1 — `src/publish/index.ts`.** Implement `Publisher.publish(job)`. Build dry-run payloads and a preview from the job, then post to Instagram, Snapchat, and TikTok. `tiktok` on the job is a 9:16 photo. The route is `TIKTOK_VIA=zernio` (default) or `native`. Until a publisher is wired, `defaultJobHandler` logs the job and writes `./out/jobs.json`.

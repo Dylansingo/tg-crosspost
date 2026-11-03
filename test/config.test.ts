@@ -111,7 +111,17 @@ describe('config', () => {
     expect(platform(config, 'instagram').enabled).toBe(true);
     expect(platform(config, 'r2').enabled).toBe(true);
     expect(platform(config, 'snapchat').enabled).toBe(true);
-    expect(config.instagram).toEqual({ userId: '1789', accessToken: 'ig-token' });
+    expect(config.instagram).toEqual({ via: 'graph', userId: '1789', accessToken: 'ig-token' });
+    expect(config.instagramVia).toBe('graph');
+    expect(config.tiktokDisclosure).toEqual({
+      privacyLevel: 'SELF_ONLY',
+      disabledComments: false,
+      disabledDuet: false,
+      disabledStitch: false,
+      isBrandedContent: false,
+      isYourBrand: false,
+      isAiGenerated: false,
+    });
     expect(config.r2?.publicBaseUrl).toBe('https://media.example.com');
     expect(config.snapchat).toEqual({
       apiKey: 'zernio-key',
@@ -198,7 +208,7 @@ describe('config', () => {
 
   it('names invalid keys without repeating their values', () => {
     expect(() => loadConfig({ ...telegram, TIKTOK_VIA: 'official' }, { mode: 'normal' })).toThrow(
-      /TIKTOK_VIA must be "zernio" or "native"/,
+      /TIKTOK_VIA must be "zernio", "native", or "blotato"/,
     );
     expect(() => loadConfig({ ...telegram, CHANNEL_ID: 'channel' }, { mode: 'normal' })).toThrow(
       /CHANNEL_ID must be an integer/,
@@ -212,6 +222,43 @@ describe('config', () => {
     expect(() => loadConfig({ ...telegram, TIKTOK_PRIVACY: 'FRIENDS' }, { mode: 'demo' })).toThrow(
       /TIKTOK_PRIVACY/,
     );
+    expect(() => loadConfig({ ...telegram, INSTAGRAM_VIA: 'meta' }, { mode: 'normal' })).toThrow(
+      /INSTAGRAM_VIA must be "graph" or "blotato"/,
+    );
+  });
+
+  it('enables Blotato only when that route and its keys are set', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const ready = loadConfig(
+      {
+        ...telegram,
+        INSTAGRAM_VIA: 'blotato',
+        TIKTOK_VIA: 'blotato',
+        BLOTATO_API_KEY: 'blotato-key',
+        BLOTATO_INSTAGRAM_ACCOUNT_ID: 'ig-acc',
+        BLOTATO_TIKTOK_ACCOUNT_ID: 'tt-acc',
+        IG_USER_ID: '1789',
+        IG_ACCESS_TOKEN: 'unused-graph',
+        ZERNIO_API_KEY: 'unused-zernio',
+        ZERNIO_TIKTOK_ACCOUNT_ID: 'unused-tt',
+      },
+      { mode: 'normal' },
+    );
+    expect(platform(ready, 'instagram').label).toBe('Instagram/Blotato');
+    expect(platform(ready, 'instagram').enabled).toBe(true);
+    expect(ready.instagram).toEqual({ via: 'blotato', apiKey: 'blotato-key', accountId: 'ig-acc' });
+    expect(platform(ready, 'tiktok').label).toBe('TikTok/Blotato');
+    expect(ready.tiktok).toEqual({ via: 'blotato', apiKey: 'blotato-key', accountId: 'tt-acc' });
+    expect(ready.tiktokDisclosure.privacyLevel).toBe('SELF_ONLY');
+    expect(ready.tiktokDisclosure.disabledComments).toBe(false);
+    expect(ready.tiktokDisclosure.isAiGenerated).toBe(false);
+
+    const partial = loadConfig(
+      { ...telegram, INSTAGRAM_VIA: 'blotato', BLOTATO_API_KEY: 'blotato-key' },
+      { mode: 'normal' },
+    );
+    expect(platform(partial, 'instagram').enabled).toBe(false);
+    expect(partial.warnings.join('\n')).toContain('BLOTATO_INSTAGRAM_ACCOUNT_ID');
   });
 
   it('treats blank values as unset', () => {

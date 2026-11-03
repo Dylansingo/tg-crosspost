@@ -46,6 +46,16 @@ Before posting, the client reads `GET /{ig-user-id}/content_publishing_limit?fie
 
 The status poll backs off from 500 ms and gives up after 60 s. `ERROR` and `EXPIRED` fail the Instagram platform.
 
+## Blotato
+
+`INSTAGRAM_VIA=blotato` and `TIKTOK_VIA=blotato` send feed, carousel, story, and TikTok photo posts through [Blotato](https://help.blotato.com/start-with-an-ai-agent/llm/publishing). Snapchat stays on Zernio. The API needs a paid Blotato plan.
+
+`POST https://backend.blotato.com/v2/posts` with header `blotato-api-key`. The body is `{ post: { accountId, content, target } }`. `content.platform` and `target.targetType` are both `instagram` or `tiktok`. Nothing is scheduled, so Blotato publishes immediately. The response `postSubmissionId` is then polled with `GET /v2/posts/{postSubmissionId}` and the same header, backing off until the status is `published`, `scheduled`, or `failed`. A timeout does not send the post again. `failed` fails that platform and includes `errorMessage` when Blotato sends one.
+
+Instagram stories set `target.mediaType` to `story` and `content.text` to `""`, because stories do not take a caption. A feed post sends the caption and one image. A carousel sends the caption and the image URLs together (still split at 10, with a leftover single image posted on its own). TikTok sends `privacyLevel` from `TIKTOK_PRIVACY` (default `SELF_ONLY`) and the six required booleans, all defaulting to false: `disabledComments`, `disabledDuet`, `disabledStitch`, `isBrandedContent`, `isYourBrand`, `isAiGenerated`.
+
+The route switches on only when its own keys are present: `BLOTATO_API_KEY` plus `BLOTATO_INSTAGRAM_ACCOUNT_ID` or `BLOTATO_TIKTOK_ACCOUNT_ID`. Dry-run writes those calls into `./out/payloads` and prints them on `preview.html`, with `<BLOTATO_API_KEY>` in place of the key.
+
 ## Snapchat
 
 Public Stories go through [Zernio](https://docs.zernio.com/platforms/snapchat/posts), not Ayrshare.
@@ -58,7 +68,7 @@ Snap had not approved Zernio's app when this was written. A live call can return
 
 ## TikTok
 
-`TIKTOK_VIA` chooses the client. The default is `zernio`.
+`TIKTOK_VIA` chooses the client. The default is `zernio`. `blotato` is the third route and is described above.
 
 **Zernio.** Same `POST /v1/posts` endpoint. Images are `mediaItems`. Settings sit in top-level `tiktokSettings`: `media_type` `photo`, `photo_cover_index` 0, `description` set to the caption, `privacy_level` from `TIKTOK_PRIVACY`. Zernio requires `content_preview_confirmed: true` and `express_consent_given: true` on every post; sending the job with `DRY_RUN=false` is the operator's confirmation. Up to 35 images per post.
 
@@ -68,4 +78,4 @@ TikTok only serves `PULL_FROM_URL` from a domain verified for the app. An unaudi
 
 ## Environment
 
-See `.env.example`. Publishing reads `IG_USER_ID`, `IG_ACCESS_TOKEN`, `ZERNIO_API_KEY`, `ZERNIO_BASE_URL`, `ZERNIO_SNAPCHAT_ACCOUNT_ID`, `ZERNIO_TIKTOK_ACCOUNT_ID`, `TIKTOK_VIA`, `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `TIKTOK_ACCESS_TOKEN`, `TIKTOK_PRIVACY`, `ADMIN_CHAT_ID`, and `DRY_RUN`. No new secret is required beyond those names. Do not commit a filled-in `.env`.
+See `.env.example`. Publishing reads the Graph, Zernio, native TikTok, and Blotato keys listed there, plus `INSTAGRAM_VIA`, `TIKTOK_VIA`, `TIKTOK_PRIVACY`, `ADMIN_CHAT_ID`, and `DRY_RUN`. Do not commit a filled-in `.env`.

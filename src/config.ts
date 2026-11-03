@@ -23,6 +23,10 @@ const ENV_KEYS = [
   'TIKTOK_CLIENT_SECRET',
   'TIKTOK_ACCESS_TOKEN',
   'TIKTOK_PRIVACY',
+  'INSTAGRAM_VIA',
+  'BLOTATO_API_KEY',
+  'BLOTATO_INSTAGRAM_ACCOUNT_ID',
+  'BLOTATO_TIKTOK_ACCOUNT_ID',
 ] as const;
 
 type EnvKey = (typeof ENV_KEYS)[number];
@@ -56,7 +60,11 @@ const EnvSchema = z.object({
   ZERNIO_BASE_URL: httpUrl.optional(),
   ZERNIO_SNAPCHAT_ACCOUNT_ID: z.string().min(1).optional(),
   ZERNIO_TIKTOK_ACCOUNT_ID: z.string().min(1).optional(),
-  TIKTOK_VIA: z.enum(['zernio', 'native']).optional(),
+  TIKTOK_VIA: z.enum(['zernio', 'native', 'blotato']).optional(),
+  INSTAGRAM_VIA: z.enum(['graph', 'blotato']).optional(),
+  BLOTATO_API_KEY: z.string().min(1).optional(),
+  BLOTATO_INSTAGRAM_ACCOUNT_ID: z.string().min(1).optional(),
+  BLOTATO_TIKTOK_ACCOUNT_ID: z.string().min(1).optional(),
   TIKTOK_CLIENT_KEY: z.string().min(1).optional(),
   TIKTOK_CLIENT_SECRET: z.string().min(1).optional(),
   TIKTOK_ACCESS_TOKEN: z.string().min(1).optional(),
@@ -68,6 +76,29 @@ const EnvSchema = z.object({
 type ParsedEnv = z.infer<typeof EnvSchema>;
 
 export type TikTokPrivacy = NonNullable<ParsedEnv['TIKTOK_PRIVACY']>;
+export type InstagramVia = 'graph' | 'blotato';
+export type TikTokVia = 'zernio' | 'native' | 'blotato';
+
+/** TikTok disclosure flags Blotato requires on every post. Defaults are off. */
+export interface TikTokDisclosure {
+  privacyLevel: TikTokPrivacy;
+  disabledComments: boolean;
+  disabledDuet: boolean;
+  disabledStitch: boolean;
+  isBrandedContent: boolean;
+  isYourBrand: boolean;
+  isAiGenerated: boolean;
+}
+
+export const DEFAULT_TIKTOK_DISCLOSURE_FLAGS = {
+  disabledComments: false,
+  disabledDuet: false,
+  disabledStitch: false,
+  isBrandedContent: false,
+  isYourBrand: false,
+  isAiGenerated: false,
+} as const;
+
 export type ConfigMode = 'normal' | 'demo';
 
 export type PlatformId = 'telegram' | 'r2' | 'instagram' | 'snapchat' | 'tiktok';
@@ -94,10 +125,9 @@ export interface R2Settings {
   publicBaseUrl: string;
 }
 
-export interface InstagramSettings {
-  userId: string;
-  accessToken: string;
-}
+export type InstagramSettings =
+  | { via: 'graph'; userId: string; accessToken: string }
+  | { via: 'blotato'; apiKey: string; accountId: string };
 
 export interface SnapchatSettings {
   apiKey: string;
@@ -113,14 +143,17 @@ export type TikTokSettings =
       clientSecret: string;
       accessToken: string;
       privacy: TikTokPrivacy;
-    };
+    }
+  | { via: 'blotato'; apiKey: string; accountId: string };
 
 export interface AppConfig {
   mode: ConfigMode;
   dryRun: boolean;
   sqlitePath: string;
-  tiktokVia: 'zernio' | 'native';
+  instagramVia: InstagramVia;
+  tiktokVia: TikTokVia;
   tiktokPrivacy: TikTokPrivacy;
+  tiktokDisclosure: TikTokDisclosure;
   warnings: string[];
   platforms: PlatformState[];
   telegram?: TelegramSettings;
@@ -188,11 +221,19 @@ export function loadConfig(
   const r2Assessment = assess('R2', r2Fields);
   remember(warnings, r2Assessment);
 
-  const instagramFields: Field[] = [
-    { key: 'IG_USER_ID', value: parsed.IG_USER_ID },
-    { key: 'IG_ACCESS_TOKEN', value: parsed.IG_ACCESS_TOKEN },
-  ];
-  const instagramAssessment = assess('Instagram', instagramFields);
+  const instagramVia = parsed.INSTAGRAM_VIA ?? 'graph';
+  const instagramLabel = instagramVia === 'blotato' ? 'Instagram/Blotato' : 'Instagram';
+  const instagramFields: Field[] =
+    instagramVia === 'blotato'
+      ? [
+          { key: 'BLOTATO_API_KEY', value: parsed.BLOTATO_API_KEY },
+          { key: 'BLOTATO_INSTAGRAM_ACCOUNT_ID', value: parsed.BLOTATO_INSTAGRAM_ACCOUNT_ID },
+        ]
+      : [
+          { key: 'IG_USER_ID', value: parsed.IG_USER_ID },
+          { key: 'IG_ACCESS_TOKEN', value: parsed.IG_ACCESS_TOKEN },
+        ];
+  const instagramAssessment = assess(instagramLabel, instagramFields);
   remember(warnings, instagramAssessment);
 
   const snapchatFields: Field[] = [
@@ -204,7 +245,12 @@ export function loadConfig(
 
   const tiktokVia = parsed.TIKTOK_VIA ?? 'zernio';
   const tiktokPrivacy = parsed.TIKTOK_PRIVACY ?? 'SELF_ONLY';
-  const tiktokLabel = tiktokVia === 'native' ? 'TikTok/native' : 'TikTok/Zernio';
+  const tiktokLabel =
+    tiktokVia === 'native'
+      ? 'TikTok/native'
+      : tiktokVia === 'blotato'
+        ? 'TikTok/Blotato'
+        : 'TikTok/Zernio';
   const tiktokFields: Field[] =
     tiktokVia === 'native'
       ? [
@@ -212,10 +258,15 @@ export function loadConfig(
           { key: 'TIKTOK_CLIENT_SECRET', value: parsed.TIKTOK_CLIENT_SECRET },
           { key: 'TIKTOK_ACCESS_TOKEN', value: parsed.TIKTOK_ACCESS_TOKEN },
         ]
-      : [
-          { key: 'ZERNIO_API_KEY', value: parsed.ZERNIO_API_KEY },
-          { key: 'ZERNIO_TIKTOK_ACCOUNT_ID', value: parsed.ZERNIO_TIKTOK_ACCOUNT_ID },
-        ];
+      : tiktokVia === 'blotato'
+        ? [
+            { key: 'BLOTATO_API_KEY', value: parsed.BLOTATO_API_KEY },
+            { key: 'BLOTATO_TIKTOK_ACCOUNT_ID', value: parsed.BLOTATO_TIKTOK_ACCOUNT_ID },
+          ]
+        : [
+            { key: 'ZERNIO_API_KEY', value: parsed.ZERNIO_API_KEY },
+            { key: 'ZERNIO_TIKTOK_ACCOUNT_ID', value: parsed.ZERNIO_TIKTOK_ACCOUNT_ID },
+          ];
   const tiktokAssessment = assess(tiktokLabel, tiktokFields);
   remember(warnings, tiktokAssessment);
 
@@ -225,7 +276,7 @@ export function loadConfig(
   const platforms: PlatformState[] = [
     state('telegram', 'Telegram ingestion', telegramAssessment),
     state('r2', 'R2', r2Assessment),
-    state('instagram', 'Instagram', instagramAssessment),
+    state('instagram', instagramLabel, instagramAssessment),
     state('snapchat', 'Snapchat/Zernio', snapchatAssessment),
     state('tiktok', tiktokLabel, tiktokAssessment),
   ];
@@ -234,8 +285,13 @@ export function loadConfig(
     mode,
     dryRun,
     sqlitePath: parsed.SQLITE_PATH ?? DEFAULT_SQLITE_PATH,
+    instagramVia,
     tiktokVia,
     tiktokPrivacy,
+    tiktokDisclosure: {
+      privacyLevel: tiktokPrivacy,
+      ...DEFAULT_TIKTOK_DISCLOSURE_FLAGS,
+    },
     warnings,
     platforms,
   };
@@ -257,10 +313,18 @@ export function loadConfig(
       publicBaseUrl: required(parsed.R2_PUBLIC_BASE_URL),
     };
   }
-  if (instagramAssessment.enabled) {
+  if (instagramAssessment.enabled && instagramVia === 'graph') {
     config.instagram = {
+      via: 'graph',
       userId: required(parsed.IG_USER_ID),
       accessToken: required(parsed.IG_ACCESS_TOKEN),
+    };
+  }
+  if (instagramAssessment.enabled && instagramVia === 'blotato') {
+    config.instagram = {
+      via: 'blotato',
+      apiKey: required(parsed.BLOTATO_API_KEY),
+      accountId: required(parsed.BLOTATO_INSTAGRAM_ACCOUNT_ID),
     };
   }
   if (snapchatAssessment.enabled) {
@@ -285,6 +349,13 @@ export function loadConfig(
       clientSecret: required(parsed.TIKTOK_CLIENT_SECRET),
       accessToken: required(parsed.TIKTOK_ACCESS_TOKEN),
       privacy: tiktokPrivacy,
+    };
+  }
+  if (tiktokAssessment.enabled && tiktokVia === 'blotato') {
+    config.tiktok = {
+      via: 'blotato',
+      apiKey: required(parsed.BLOTATO_API_KEY),
+      accountId: required(parsed.BLOTATO_TIKTOK_ACCOUNT_ID),
     };
   }
 
@@ -339,7 +410,8 @@ function parseEnv(env: NodeJS.ProcessEnv): ParsedEnv {
 
 function formatIssue(issue: ZodIssue): string {
   const key = String(issue.path[0] ?? 'configuration');
-  if (key === 'TIKTOK_VIA') return 'TIKTOK_VIA must be "zernio" or "native"';
+  if (key === 'TIKTOK_VIA') return 'TIKTOK_VIA must be "zernio", "native", or "blotato"';
+  if (key === 'INSTAGRAM_VIA') return 'INSTAGRAM_VIA must be "graph" or "blotato"';
   if (key === 'TIKTOK_PRIVACY') {
     return 'TIKTOK_PRIVACY must be SELF_ONLY, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, or PUBLIC_TO_EVERYONE';
   }

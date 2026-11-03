@@ -44,7 +44,8 @@ describe('demo', () => {
   it('builds one job per post and a single album job, with photo buffers', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const outFile = path.join(os.tmpdir(), `tg-crosspost-jobs-${process.pid}.json`);
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tg-crosspost-demo-'));
+    const outFile = path.join(outDir, 'jobs.json');
     const jobs = await runDemo({
       samplesDir,
       outFile,
@@ -101,12 +102,13 @@ describe('demo', () => {
     expect(stored[2]?.photos[0]?.byteLength).toBe(album.photos[0]?.buffer?.length);
     expect(JSON.stringify(stored)).not.toContain('"type":"Buffer"');
     expect(log.mock.calls.flat().join('\n')).toContain('demo mode forces DRY_RUN');
-    fs.rmSync(outFile, { force: true });
+    fs.rmSync(outDir, { recursive: true, force: true });
   });
 
   it('runs from the CLI with no .env and no platform keys', async () => {
     const env = { ...process.env };
     for (const key of PLATFORM_KEYS) delete env[key];
+    fs.rmSync(path.join(repoRoot, 'out'), { recursive: true, force: true });
     const { stdout } = await execFileAsync('npm', ['run', 'demo', '--', './samples'], {
       cwd: repoRoot,
       env,
@@ -118,6 +120,27 @@ describe('demo', () => {
     expect(jobs.filter((job) => job.photos.length === 3)).toHaveLength(1);
     expect(stdout).toContain('DRY_RUN: true');
     expect(stdout).toContain('disabled');
-    fs.rmSync(path.join(repoRoot, 'out'), { recursive: true, force: true });
+    const outDir = path.join(repoRoot, 'out');
+    const preview = fs.readFileSync(path.join(outDir, 'preview.html'), 'utf8');
+    expect(preview).toContain('Morning on the towpath');
+    expect(preview).toContain('Saturday market');
+    expect(preview).toContain('Green room');
+    expect(preview).toContain('Local stand-in for an R2 URL');
+    const payloadDir = path.join(outDir, 'payloads');
+    const payloadNames = fs.readdirSync(payloadDir);
+    expect(payloadNames.filter((name) => name.endsWith('-instagram-feed.json'))).toHaveLength(1);
+    expect(payloadNames.filter((name) => name.endsWith('-instagram-carousel.json'))).toHaveLength(
+      1,
+    );
+    expect(payloadNames.filter((name) => name.endsWith('-instagram-story.json'))).toHaveLength(2);
+    expect(payloadNames.filter((name) => name.endsWith('-snapchat-story.json'))).toHaveLength(2);
+    expect(payloadNames.filter((name) => name.endsWith('-tiktok-photo.json'))).toHaveLength(2);
+    const payloadText = payloadNames
+      .map((name) => fs.readFileSync(path.join(payloadDir, name), 'utf8'))
+      .join('\n');
+    expect(payloadText).toContain('<IG_ACCESS_TOKEN>');
+    expect(payloadText).toContain('<ZERNIO_API_KEY>');
+    expect(payloadText).toContain('SELF_ONLY');
+    fs.rmSync(outDir, { recursive: true, force: true });
   }, 20_000);
 });

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import { loadConfig, logStartup } from './config.js';
 import { createDefaultJobHandler } from './dry-run.js';
+import { createLocalStager, createPublisher } from './publish/index.js';
 import { ALBUM_DEBOUNCE_MS } from './ingest/albums.js';
 import { filePathFromTelegramUrl } from './ingest/download.js';
 import { createIngestor } from './ingest/pipeline.js';
@@ -75,12 +76,21 @@ export async function runDemo(options: DemoOptions = {}): Promise<Job[]> {
     });
 
     const jobs: Job[] = [];
-    mkdirSync(path.dirname(outFile), { recursive: true });
+    const outDir = path.dirname(outFile);
+    mkdirSync(outDir, { recursive: true });
     rmSync(outFile, { force: true });
+    rmSync(path.join(outDir, 'payloads'), { recursive: true, force: true });
+    rmSync(path.join(outDir, 'preview.html'), { force: true });
     const record = createDefaultJobHandler({ outFile });
-    const handler: JobHandler = (job) => {
+    const publisher = createPublisher({
+      config,
+      stager: createLocalStager(outDir),
+      outDir,
+    });
+    const handler: JobHandler = async (job) => {
       jobs.push(job);
-      return record(job);
+      await record(job);
+      await publisher.publish(job);
     };
 
     const seen = createSeenStore(':memory:', { now: options.now });

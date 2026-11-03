@@ -115,7 +115,7 @@ describe('config', () => {
     expect(config.r2?.publicBaseUrl).toBe('https://media.example.com');
     expect(config.snapchat).toEqual({
       apiKey: 'zernio-key',
-      baseUrl: 'https://api.zernio.com',
+      baseUrl: 'https://zernio.com/api',
       accountId: 'snap-1',
     });
     expect(config.warnings.some((warning) => warning.startsWith('R2'))).toBe(false);
@@ -142,7 +142,7 @@ describe('config', () => {
     expect(viaZernio.tiktok).toEqual({
       via: 'zernio',
       apiKey: 'zernio-key',
-      baseUrl: 'https://api.zernio.com',
+      baseUrl: 'https://zernio.com/api',
       accountId: 'tt-1',
     });
     expect(viaZernio.tiktokPrivacy).toBe('SELF_ONLY');

@@ -142,7 +142,8 @@ interface Assessment {
 }
 
 const DEFAULT_SQLITE_PATH = './data/tg-crosspost.db';
-const DEFAULT_ZERNIO_BASE_URL = 'https://api.zernio.com';
+/** Documented Zernio origin. The client appends `/v1/posts`. */
+export const DEFAULT_ZERNIO_BASE_URL = 'https://zernio.com/api';
 
 export interface LoadConfigOptions {
   mode?: ConfigMode;
@@ -315,7 +316,7 @@ export function logStartup(config: AppConfig): void {
   console.log(formatStartupReport(config));
   if (config.mode === 'normal' && !config.dryRun) {
     console.warn(
-      'DRY_RUN is false, but publishing is not implemented yet (PE-1). Jobs are only logged and written to ./out/jobs.json.',
+      'DRY_RUN is false. Live publishing will post to every enabled platform. A file:// media URL is refused until R2 returns an https URL.',
     );
   }
 }

@@ -14,8 +14,9 @@ import {
 } from './ingest/index.js';
 import { logError } from './log.js';
 import type { Stager } from './media/index.js';
+import { createLocalStager, createPublisher, notifierFromGrammy } from './publish/index.js';
 import { isDirectRun } from './runtime.js';
-import { defaultJobHandler, type JobHandler } from './types.js';
+import { createDefaultJobHandler, defaultJobHandler, type JobHandler } from './types.js';
 
 export const WEBHOOK_PATH = '/webhook/telegram';
 const PORT = 3000;
@@ -108,6 +109,12 @@ export async function main(): Promise<void> {
   const bot = new Bot(config.telegram.botToken);
   const seen = createSeenStore(config.sqlitePath);
   seen.startHourlyPrune();
+  const record = createDefaultJobHandler();
+  const publisher = createPublisher({
+    config,
+    stager: createLocalStager(),
+    notifier: notifierFromGrammy(bot.api, config.telegram.adminChatId),
+  });
   const handle = createApp({
     channelId: config.telegram.channelId,
     webhookSecret: config.telegram.webhookSecret,
@@ -115,6 +122,10 @@ export async function main(): Promise<void> {
     seen,
     files: createGrammyFileApi(bot),
     fetcher: createHttpFetcher(),
+    handler: async (job) => {
+      await record(job);
+      await publisher.publish(job);
+    },
   });
 
   const server = handle.app.listen(PORT, () => {

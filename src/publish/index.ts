@@ -4,6 +4,13 @@ import { DEFAULT_ZERNIO_BASE_URL, type AppConfig, type TikTokPrivacy } from '../
 import { logError } from '../log.js';
 import type { Stager } from '../media/index.js';
 import type { Job, Target } from '../types.js';
+import {
+  blotatoPayloadFiles,
+  instagramBlotatoPayloadFiles,
+  instagramBlotatoPosts,
+  publishBlotato,
+  tiktokBlotatoPosts,
+} from './blotato.js';
 import { createHttpRuntime, type HttpRuntime } from './http.js';
 import {
   instagramPayloadFiles,
@@ -28,6 +35,9 @@ const ZERNIO_KEY_PLACEHOLDER = '<ZERNIO_API_KEY>';
 const SNAP_ACCOUNT_PLACEHOLDER = '<ZERNIO_SNAPCHAT_ACCOUNT_ID>';
 const TIKTOK_ACCOUNT_PLACEHOLDER = '<ZERNIO_TIKTOK_ACCOUNT_ID>';
 const TIKTOK_TOKEN_PLACEHOLDER = '<TIKTOK_ACCESS_TOKEN>';
+const BLOTATO_KEY_PLACEHOLDER = '<BLOTATO_API_KEY>';
+const BLOTATO_IG_ACCOUNT_PLACEHOLDER = '<BLOTATO_INSTAGRAM_ACCOUNT_ID>';
+const BLOTATO_TT_ACCOUNT_PLACEHOLDER = '<BLOTATO_TIKTOK_ACCOUNT_ID>';
 
 export const LIVE_MEDIA_ERROR = 'R2 keys required for live publishing';
 
@@ -96,8 +106,14 @@ export function createPublisher(deps: PublisherDeps): Publisher {
     const photos = await stagePhotos(job, deps.stager);
     const targets = new Set(job.targets);
     if (deps.config.dryRun) {
-      writeDryRun(outDir, job, photos, targets, deps.config);
-      preview.push(toPreview(outDir, job, photos));
+      const files = writeDryRun(outDir, job, photos, targets, deps.config);
+      const requestNotes = files
+        .filter((file) => isBlotatoPayload(file.json))
+        .map((file) => JSON.stringify(file.json, null, 2));
+      preview.push({
+        ...toPreview(outDir, job, photos),
+        ...(requestNotes.length > 0 ? { requestNotes } : {}),
+      });
       writePreview(outDir, preview);
       console.log(
         `[DRY_RUN] job ${job.id}: wrote payloads under ${path.join(outDir, 'payloads')} and updated preview.html`,
@@ -175,18 +191,27 @@ function writeDryRun(
   photos: readonly StagedPhoto[],
   targets: Set<Target>,
   config: AppConfig,
-): void {
+): PayloadFile[] {
   const files: PayloadFile[] = [];
   const postsUrl = zernioPostsUrl(zernioBase(config));
   if (targets.has('ig_feed') || targets.has('ig_story')) {
     files.push(
-      ...instagramPayloadFiles({
-        jobId: job.id,
-        caption: job.caption,
-        photos,
-        targets: job.targets,
-        credentials: { userId: IG_USER_PLACEHOLDER, accessToken: IG_TOKEN_PLACEHOLDER },
-      }),
+      ...(config.instagramVia === 'blotato'
+        ? instagramBlotatoPayloadFiles({
+            jobId: job.id,
+            caption: job.caption,
+            photos,
+            targets: job.targets,
+            accountId: BLOTATO_IG_ACCOUNT_PLACEHOLDER,
+            apiKey: BLOTATO_KEY_PLACEHOLDER,
+          })
+        : instagramPayloadFiles({
+            jobId: job.id,
+            caption: job.caption,
+            photos,
+            targets: job.targets,
+            credentials: { userId: IG_USER_PLACEHOLDER, accessToken: IG_TOKEN_PLACEHOLDER },
+          })),
     );
   }
   if (targets.has('snap_story')) {
@@ -202,17 +227,30 @@ function writeDryRun(
   }
   if (targets.has('tiktok')) {
     files.push(
-      ...tiktokPayloadFiles({
-        jobId: job.id,
-        imageUrls: photos.map((photo) => photo.url),
-        caption: job.caption,
-        privacy: privacyFor(config),
-        via: config.tiktokVia,
-        apiKey: ZERNIO_KEY_PLACEHOLDER,
-        accountId: TIKTOK_ACCOUNT_PLACEHOLDER,
-        accessToken: TIKTOK_TOKEN_PLACEHOLDER,
-        postsUrl,
-      }),
+      ...(config.tiktokVia === 'blotato'
+        ? blotatoPayloadFiles({
+            jobId: job.id,
+            platform: 'tiktok',
+            kind: 'photo',
+            apiKey: BLOTATO_KEY_PLACEHOLDER,
+            posts: tiktokBlotatoPosts({
+              caption: job.caption,
+              imageUrls: photos.map((photo) => photo.url),
+              accountId: BLOTATO_TT_ACCOUNT_PLACEHOLDER,
+              disclosure: config.tiktokDisclosure,
+            }),
+          })
+        : tiktokPayloadFiles({
+            jobId: job.id,
+            imageUrls: photos.map((photo) => photo.url),
+            caption: job.caption,
+            privacy: privacyFor(config),
+            via: config.tiktokVia,
+            apiKey: ZERNIO_KEY_PLACEHOLDER,
+            accountId: TIKTOK_ACCOUNT_PLACEHOLDER,
+            accessToken: TIKTOK_TOKEN_PLACEHOLDER,
+            postsUrl,
+          })),
     );
   }
   const directory = path.join(outDir, 'payloads');
@@ -220,6 +258,7 @@ function writeDryRun(
   for (const file of files) {
     writeFileSync(path.join(directory, file.fileName), `${JSON.stringify(file.json, null, 2)}\n`);
   }
+  return files;
 }
 
 async function publishInstagramLive(
@@ -228,6 +267,24 @@ async function publishInstagramLive(
   config: AppConfig,
   http: HttpRuntime,
 ): Promise<PlatformOutcome> {
+  if (config.instagramVia === 'blotato') {
+    if (!config.instagram || config.instagram.via !== 'blotato') {
+      throw new Error(
+        'Instagram is not configured (BLOTATO_API_KEY and BLOTATO_INSTAGRAM_ACCOUNT_ID).',
+      );
+    }
+    return publishBlotato({
+      platform: 'instagram',
+      apiKey: config.instagram.apiKey,
+      http,
+      posts: instagramBlotatoPosts({
+        caption: job.caption,
+        photos,
+        targets: job.targets,
+        accountId: config.instagram.accountId,
+      }),
+    });
+  }
   const credentials = instagramCredentials(config);
   return publishInstagram(
     { jobId: job.id, caption: job.caption, photos, targets: job.targets, credentials },
@@ -275,6 +332,19 @@ async function publishTikTokLive(
       http,
     });
   }
+  if (config.tiktok.via === 'blotato') {
+    return publishBlotato({
+      platform: 'tiktok',
+      apiKey: config.tiktok.apiKey,
+      http,
+      posts: tiktokBlotatoPosts({
+        caption: job.caption,
+        imageUrls: photos.map((photo) => photo.url),
+        accountId: config.tiktok.accountId,
+        disclosure: config.tiktokDisclosure,
+      }),
+    });
+  }
   return publishTikTok({
     imageUrls: photos.map((photo) => photo.url),
     caption: job.caption,
@@ -288,10 +358,14 @@ async function publishTikTokLive(
 }
 
 function instagramCredentials(config: AppConfig): InstagramCredentials {
-  if (!config.instagram) {
+  if (!config.instagram || config.instagram.via !== 'graph') {
     throw new Error('Instagram is not configured (IG_USER_ID and IG_ACCESS_TOKEN).');
   }
   return { userId: config.instagram.userId, accessToken: config.instagram.accessToken };
+}
+
+function isBlotatoPayload(json: unknown): boolean {
+  return typeof json === 'object' && json !== null && 'via' in json && json.via === 'blotato';
 }
 
 function privacyFor(config: AppConfig): TikTokPrivacy {

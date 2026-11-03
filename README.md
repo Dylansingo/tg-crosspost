@@ -50,7 +50,7 @@ Regenerate the images with `node scripts/generate-samples.mjs`.
 - **Demo mode** treats every platform as optional and forces `DRY_RUN`, even when the environment says `false`.
 - A platform is **enabled** only when every key in its group is present. An empty group is **disabled**. A partly filled group stays disabled and a warning names the missing keys.
 - `DRY_RUN` defaults to `true`.
-- `TIKTOK_VIA` is `zernio` (default) or `native`. TikTok enables from the keys of the chosen route only. `TIKTOK_PRIVACY` defaults to `SELF_ONLY` and does not enable the native route on its own.
+- `INSTAGRAM_VIA` is `graph` (default) or `blotato`. `TIKTOK_VIA` is `zernio` (default), `native`, or `blotato`. Each route enables from its own keys only. `TIKTOK_PRIVACY` defaults to `SELF_ONLY` and does not enable a route on its own.
 
 On startup the process logs `DRY_RUN` and a table of enabled and disabled platforms:
 
@@ -58,10 +58,12 @@ On startup the process logs `DRY_RUN` and a table of enabled and disabled platfo
 | ------------------ | ---------------------------------------------------------------------------------------------- |
 | Telegram ingestion | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `CHANNEL_ID`, `ADMIN_CHAT_ID`                 |
 | R2                 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_BASE_URL` |
-| Instagram          | `IG_USER_ID`, `IG_ACCESS_TOKEN`                                                                |
+| Instagram          | `IG_USER_ID`, `IG_ACCESS_TOKEN` (`INSTAGRAM_VIA=graph`)                                        |
+| Instagram/Blotato  | `BLOTATO_API_KEY`, `BLOTATO_INSTAGRAM_ACCOUNT_ID` (`INSTAGRAM_VIA=blotato`)                    |
 | Snapchat/Zernio    | `ZERNIO_API_KEY`, `ZERNIO_SNAPCHAT_ACCOUNT_ID`                                                 |
 | TikTok/Zernio      | `ZERNIO_API_KEY`, `ZERNIO_TIKTOK_ACCOUNT_ID`                                                   |
 | TikTok/native      | `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `TIKTOK_ACCESS_TOKEN`                             |
+| TikTok/Blotato     | `BLOTATO_API_KEY`, `BLOTATO_TIKTOK_ACCOUNT_ID` (`TIKTOK_VIA=blotato`)                          |
 
 `ZERNIO_BASE_URL` defaults to `https://zernio.com/api`. `SQLITE_PATH` defaults to `./data/tg-crosspost.db`.
 

@@ -56,8 +56,18 @@ function baseConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     mode: 'normal',
     dryRun: true,
     sqlitePath: ':memory:',
+    instagramVia: 'graph',
     tiktokVia: 'zernio',
     tiktokPrivacy: 'SELF_ONLY',
+    tiktokDisclosure: {
+      privacyLevel: 'SELF_ONLY',
+      disabledComments: false,
+      disabledDuet: false,
+      disabledStitch: false,
+      isBrandedContent: false,
+      isYourBrand: false,
+      isAiGenerated: false,
+    },
     warnings: [],
     platforms: [],
     ...overrides,
@@ -117,7 +127,7 @@ const QUOTA_OK = {
 function liveConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return baseConfig({
     dryRun: false,
-    instagram: { userId: '1789', accessToken: 'ig-secret-token' },
+    instagram: { via: 'graph', userId: '1789', accessToken: 'ig-secret-token' },
     snapchat: {
       apiKey: 'zernio-secret',
       baseUrl: 'https://zernio.com/api',

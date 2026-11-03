@@ -13,6 +13,8 @@ export interface PreviewEntry {
   messageIds: readonly number[];
   targets: readonly Target[];
   images: readonly PreviewImage[];
+  /** Dry-run Blotato request documents, shown under the mock-up. */
+  requestNotes?: readonly string[];
 }
 
 export function previewImageSrc(mediaUrl: string, previewDir: string): string {
@@ -126,6 +128,15 @@ export function renderPreview(entries: readonly PreviewEntry[]): string {
       text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
     }
     .note { margin: 8px 0 0; font: 13px/1.4 ui-sans-serif, system-ui, sans-serif; }
+    .request {
+      margin-top: 16px;
+      padding: 12px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      background: var(--card);
+      border: 1px solid var(--line);
+      font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
   </style>
 </head>
 <body>
@@ -171,6 +182,11 @@ function renderJob(entry: PreviewEntry): string {
       <h2>${escapeHtml(entry.caption || 'Untitled')}</h2>
       <p class="job-meta">Job ${escapeHtml(entry.jobId)} · messages ${escapeHtml(entry.messageIds.join(', '))}</p>
 ${sections.join('\n')}
+${
+  entry.requestNotes && entry.requestNotes.length > 0
+    ? `      <h3>Blotato request</h3>\n      <pre class="request">${escapeHtml(entry.requestNotes.join('\n\n'))}</pre>`
+    : ''
+}
     </article>`;
 }
 

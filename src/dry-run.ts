@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import type { StagedMedia } from './media/contract.js';
 import { LOCAL_STAGE_DIRECTORY } from './media/index.js';
 import type { Job, JobHandler, Target } from './types.js';
 
@@ -11,6 +12,7 @@ interface StoredPhoto {
   width: number;
   height: number;
   byteLength: number;
+  staged?: StagedMedia;
 }
 
 interface StoredJob {
@@ -54,13 +56,17 @@ function serialiseJob(job: Job): StoredJob {
     caption: job.caption,
     targets: job.targets,
     receivedAt: job.receivedAt.toISOString(),
-    photos: job.photos.map((photo) => ({
-      fileId: photo.fileId,
-      fileUniqueId: photo.fileUniqueId,
-      width: photo.width,
-      height: photo.height,
-      byteLength: photo.buffer?.byteLength ?? 0,
-    })),
+    photos: job.photos.map((photo) => {
+      const stored: StoredPhoto = {
+        fileId: photo.fileId,
+        fileUniqueId: photo.fileUniqueId,
+        width: photo.width,
+        height: photo.height,
+        byteLength: photo.buffer?.byteLength ?? 0,
+      };
+      if (photo.staged) stored.staged = photo.staged;
+      return stored;
+    }),
   };
   if (job.mediaGroupId !== undefined) {
     stored.mediaGroupId = job.mediaGroupId;

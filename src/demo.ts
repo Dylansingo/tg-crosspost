@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { loadConfig, logStartup } from './config.js';
 import { createDefaultJobHandler } from './dry-run.js';
@@ -9,6 +10,12 @@ import { createIngestor } from './ingest/pipeline.js';
 import { createSeenStore } from './ingest/seen.js';
 import type { TimerControls } from './ingest/timers.js';
 import { logError } from './log.js';
+import {
+  createStager,
+  MEDIA_DIRECTORY,
+  writeContactSheet,
+  type ContactSheetRow,
+} from './media/index.js';
 import { isDirectRun } from './runtime.js';
 import type { Job, JobHandler } from './types.js';
 
@@ -39,6 +46,8 @@ type ManifestPost = Manifest['posts'][number];
 export interface DemoOptions {
   samplesDir?: string;
   outFile?: string;
+  /** Feed and story renders. Defaults to `./out/media`. */
+  mediaDir?: string;
   env?: NodeJS.ProcessEnv;
   timers?: TimerControls;
   now?: () => number;
@@ -64,6 +73,8 @@ export async function runDemo(options: DemoOptions = {}): Promise<Job[]> {
   try {
     const config = loadConfig(options.env ?? process.env, { mode: 'demo' });
     logStartup(config);
+    const mediaDir = path.resolve(options.mediaDir ?? MEDIA_DIRECTORY);
+    const stager = await createStager(config, { directory: mediaDir });
     console.log(`Demo: reading samples from ${samplesDir}`);
 
     const manifest = readManifest(samplesDir);
@@ -89,6 +100,7 @@ export async function runDemo(options: DemoOptions = {}): Promise<Job[]> {
       seen,
       handler,
       token: DEMO_TOKEN,
+      stager,
       files: {
         async getFile(fileId: string) {
           if (!files.has(fileId)) throw new Error(`Demo sample is missing for ${fileId}.`);
@@ -129,7 +141,11 @@ export async function runDemo(options: DemoOptions = {}): Promise<Job[]> {
       seen.close();
     }
 
+    const contactSheet = path.join(mediaDir, 'contact-sheet.jpg');
+    await writeContactSheet(contactRows(jobs), contactSheet);
     console.log(`Demo wrote ${jobs.length} job(s) to ${outFile}`);
+    console.log(`Demo staged media in ${mediaDir}`);
+    console.log(`Demo wrote contact sheet to ${contactSheet}`);
     return jobs;
   } finally {
     globalThis.fetch = previousFetch;
@@ -144,6 +160,22 @@ export async function main(argv: readonly string[] = process.argv): Promise<void
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
   }
+}
+
+function contactRows(jobs: Job[]): ContactSheetRow[] {
+  const rows: ContactSheetRow[] = [];
+  for (const job of jobs) {
+    for (const photo of job.photos) {
+      if (!photo.staged) continue;
+      rows.push({
+        label: photo.fileId,
+        feed: readFileSync(fileURLToPath(photo.staged.feed)),
+        story: readFileSync(fileURLToPath(photo.staged.story)),
+      });
+    }
+  }
+  rows.sort((left, right) => left.label.localeCompare(right.label));
+  return rows;
 }
 
 function readManifest(samplesDir: string): Manifest {

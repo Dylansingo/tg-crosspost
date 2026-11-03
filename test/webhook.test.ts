@@ -332,7 +332,12 @@ describe('telegram webhook', () => {
     const stager: Stager = {
       async stage(buf, name) {
         staged.push({ name, bytes: buf.length });
-        return `./out/${name}`;
+        const story = `file:///tmp/${name}-story.jpg`;
+        return {
+          feed: `file:///tmp/${name}-feed.jpg`,
+          story,
+          tiktok: story,
+        };
       },
     };
     const ctx = createTestApp({ stager });
@@ -349,6 +354,8 @@ describe('telegram webhook', () => {
       expect(staged[0]?.name).toMatch(/-0$/);
       expect(staged[0]?.bytes).toBeGreaterThan(0);
       expect(ctx.jobs).toHaveLength(1);
+      expect(ctx.jobs[0]?.photos[0]?.staged?.feed).toContain(staged[0]?.name ?? '');
+      expect(ctx.jobs[0]?.photos[0]?.staged?.tiktok).toBe(ctx.jobs[0]?.photos[0]?.staged?.story);
     } finally {
       ctx.close();
     }

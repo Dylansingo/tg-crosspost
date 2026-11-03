@@ -303,11 +303,23 @@ export function formatPlatformTable(config: AppConfig): string {
   ].join('\n');
 }
 
+/**
+ * R2 is used only outside demo mode, and only when the whole key group is set.
+ * Demo mode and any missing key stay on local files.
+ */
+export function usesR2Stager(config: Pick<AppConfig, 'mode' | 'r2'>): boolean {
+  return config.mode !== 'demo' && config.r2 !== undefined;
+}
+
 export function formatStartupReport(config: AppConfig): string {
   const dryRun = `DRY_RUN: ${config.dryRun ? 'true' : 'false'}${
     config.mode === 'demo' ? ' (demo mode forces DRY_RUN)' : ''
   }`;
-  return `${dryRun}\n\n${formatPlatformTable(config)}`;
+  const stager =
+    usesR2Stager(config) && config.r2
+      ? `Stager: R2 (${config.r2.publicBaseUrl})`
+      : 'Stager: local files (./out/media)';
+  return `${dryRun}\n\n${formatPlatformTable(config)}\n\n${stager}`;
 }
 
 /** Log the platform table. Partial-group warnings are emitted by {@link loadConfig}. */

@@ -1,3 +1,5 @@
+import type { StagedMedia } from './media/contract.js';
+
 /**
  * Downstream post targets.
  * `tiktok` is reserved for a 9:16 photo post, via Zernio or the native route.
@@ -10,6 +12,8 @@ export interface Photo {
   width: number;
   height: number;
   buffer?: Buffer;
+  /** URLs from `Stager.stage`. Publishers use these rather than the raw buffer. */
+  staged?: StagedMedia;
 }
 
 export interface Job {
